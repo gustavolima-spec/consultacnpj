@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consulta CNPJ (Inteligência FAN Capitall)</title>
+    <!-- SheetJS para exportação Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        /* RESET E ESTRUTURA BASE (MODO CLARO FIXO) */
+        * { box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f4f7f9;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            color: #333333;
+            overflow: hidden;
+        }
+
+        .top-section {
+            flex-shrink: 0;
+            background: #ffffff;
+            z-index: 1000;
+            border-bottom: 2px solid #0066cc;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header { padding: 8px 20px; }
+
+        .header-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .logo-area { display: flex; align-items: center; gap: 12px; }
+        .logo-area img { max-height: 35px; }
+        .logo-area h3 { margin: 0; font-size: 15px; color: #0066cc; font-weight: 700; }
+
+        /* DASHBOARD CARDS */
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .card {
+            background: #ffffff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border-left: 4px solid #0066cc;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .card.warning { border-left-color: #f39c12; }
+        .card.danger { border-left-color: #d93025; }
+        .card.success { border-left-color: #28a745; }
+
+        .card-label { font-size: 9px; font-weight: 700; color: #666666; text-transform: uppercase; }
+        .card-value { font-size: 16px; font-weight: 700; color: #333333; }
+
+        .controls { display: flex; flex-direction: column; gap: 6px; }
+
+        textarea {
+            width: 100%;
+            height: 45px;
+            padding: 6px;
+            border: 1px solid #eef0f2;
+            border-radius: 4px;
+            resize: none;
+            font-family: 'Consolas', monospace;
+            font-size: 11px;
+            background: #f0f4f8;
+            color: #333333;
+        }
+
+        .btn-container { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+        button {
+            padding: 5px 12px;
+            background: #0066cc;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 11px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        button:hover { background: #004d99; transform: translateY(-1px); }
+        button.btn-secondary { background: #6c757d; }
+        button.btn-success { background: #28a745; }
+
+        #status { font-size: 11px; font-weight: 600; color: #666666; margin-left: auto; }
+
+        /* FILTROS */
+        .filters {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 10px;
+            padding: 8px 20px;
+            background: #f0f4f8;
+            border-bottom: 1px solid #eef0f2;
+        }
+
+        .filter-group { display: flex; flex-direction: column; gap: 2px; }
+        .filter-group label { font-size: 9px; font-weight: 700; color: #666666; text-transform: uppercase; }
+        .filters select { 
+            padding: 3px; 
+            font-size: 10px; 
+            height: 60px; 
+            border: 1px solid #eef0f2; 
+            border-radius: 4px;
+            background: #ffffff;
+            color: #333333;
+        }
+
+        /* TABELA */
+        .table-container { flex-grow: 1; overflow: auto; background: #ffffff; }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        th, td { 
+            border: 1px solid #eef0f2; 
+            padding: 6px 8px; 
+            font-size: 10px; 
+            text-align: left;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        thead th {
+            background: #f8f9fa;
+            color: #333333;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            font-weight: 700;
+            border-bottom: 2px solid #0066cc;
+        }
+
+        tbody tr:nth-child(even) { background-color: #fcfdfe; }
+        tbody tr:hover { background-color: #f1f6fb; }
+
+        /* LARGURAS */
+        .col-cnpj { width: 100px; }
+        .col-cliente { width: 180px; }
+        .col-status { width: 70px; text-align: center; }
+        .col-rj { width: 55px; text-align: center; }
+        .col-tipo { width: 60px; text-align: center; }
+        .col-idade { width: 60px; text-align: center; }
+        .col-loc { width: 70px; text-align: center; }
+        .col-mun { width: 110px; }
+        .col-uf { width: 35px; text-align: center; }
+        .col-cnae { width: 75px; text-align: center; }
+        .col-sec { width: 35px; text-align: center; }
+        .col-div { width: 35px; text-align: center; }
+        .col-desc-div { width: 150px; }
+        .col-ativ { width: auto; min-width: 150px; white-space: normal; }
+
+        /* BADGES */
+        .status-badge { padding: 2px 4px; border-radius: 8px; font-weight: 700; font-size: 9px; text-transform: uppercase; }
+        .status-ativa { background: #e6f4ea; color: #1e7e34; }
+        .status-alerta { background: #fce8e6; color: #d93025; }
+        
+        .badge-tipo { padding: 2px 4px; border-radius: 4px; font-size: 9px; font-weight: 600; }
+        .tipo-matriz { background: #e3f2fd; color: #0d47a1; }
+        .tipo-filial { background: #f3e5f5; color: #4a148c; }
+
+        tr.recuperacao-judicial { color: #d93025 !important; font-weight: 600; background-color: rgba(217, 48, 37, 0.05) !important; }
+        tr.recuperacao-judicial td { color: #d93025 !important; }
+        
+        .btn-maps {
+            background: #ffffff;
+            color: #4285F4;
+            border: 1px solid #4285F4;
+            padding: 1px 4px;
+            font-size: 9px;
+            border-radius: 3px;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+        }
+        .btn-maps:hover { background: #4285F4; color: #fff; }
+
+        .loading { color: #0066cc; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+    </style>
+</head>
+
+<body>
+
+<div class="top-section">
+    <div class="header">
+        <div class="header-top">
+            <div class="logo-area">
+                <img src="https://fancapital.com.br/wp-content/uploads/2025/07/download_-3-1889x1080.png" alt="Logo FAN Capital">
+                <h3>Consulta CNPJ (Setor de Inteligência FAN Capital)</h3>
+            </div>
+            <div id="status"></div>
+        </div>
+
+        <div class="dashboard">
+            <div class="card"><span class="card-label">Total Empresas</span><span id="dashTotal" class="card-value">0</span></div>
+            <div class="card danger"><span class="card-label">Rec. Judicial</span><span id="dashRJ" class="card-value">0</span></div>
+            <div class="card warning"><span class="card-label">Status Não Ativa</span><span id="dashInativa" class="card-value">0</span></div>
+            <div class="card success"><span class="card-label">Média de Idade</span><span id="dashIdade" class="card-value">0</span></div>
+        </div>
+
+        <div class="controls">
+            <textarea id="cnpjs" placeholder="CNPJs (um por linha ou vírgula)">Insira aqui os CNPJs (um por linha ou vírgula)</textarea>
+            <div class="btn-container">
+                <button onclick="consultar()">🔍 Consultar</button>
+                <button class="btn-secondary" onclick="limparFiltros()">🧹 Limpar Filtros</button>
+                <button class="btn-success" onclick="exportarExcel()">📊 Exportar Excel</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="filters">
+        <div class="filter-group"><label>UF</label><select id="filtroUF" multiple onchange="aplicarFiltros()"></select></div>
+        <div class="filter-group"><label>MUNICÍPIO</label><select id="filtroMunicipio" multiple onchange="aplicarFiltros()"></select></div>
+        <div class="filter-group"><label>STATUS</label><select id="filtroStatus" multiple onchange="aplicarFiltros()"></select></div>
+        <div class="filter-group"><label>TIPO</label><select id="filtroTipo" multiple onchange="aplicarFiltros()">
+            <option value="MATRIZ">MATRIZ</option>
+            <option value="FILIAL">FILIAL</option>
+        </select></div>
+        <div class="filter-group"><label>IDADE (RISCO)</label><select id="filtroIdade" multiple onchange="aplicarFiltros()">
+            <option value="NOVA">Até 2 anos (Alta)</option>
+            <option value="JOVEM">2 a 5 anos (Média)</option>
+            <option value="MATURA">5 a 10 anos (Baixa)</option>
+            <option value="ANTIGA">Acima de 10 anos (Mínima)</option>
+        </select></div>
+        <div class="filter-group"><label>CLIENTE</label><select id="filtroCliente" multiple onchange="aplicarFiltros()"></select></div>
+    </div>
+</div>
+
+<div class="table-container">
+    <table id="tabelaDados">
+        <thead>
+            <tr>
+                <th class="col-cnpj">CNPJ</th>
+                <th class="col-cliente">CLIENTE</th>
+                <th class="col-status">STATUS</th>
+                <th class="col-rj">REC.JUD.</th>
+                <th class="col-tipo">TIPO</th>
+                <th class="col-idade">IDADE</th>
+                <th class="col-loc">MAPA</th>
+                <th class="col-mun">MUNICÍPIO</th>
+                <th class="col-uf">UF</th>
+                <th class="col-cnae">CNAE</th>
+                <th class="col-sec">SEC.</th>
+                <th class="col-div">DIV.</th>
+                <th class="col-desc-div">DIVISÃO</th>
+                <th class="col-ativ">ATIVIDADE PRINCIPAL</th>
+            </tr>
+        </thead>
+        <tbody id="resultado"></tbody>
+    </table>
+</div>
+
+<script>
+    const mapaDivisoes = { "01": "AGRICULTURA, PECUÁRIA E SERVIÇOS RELACIONADOS", "02": "PRODUÇÃO FLORESTAL", "03": "PESCA E AQÜICULTURA", "05": "EXTRAÇÃO DE CARVÃO MINERAL", "06": "EXTRAÇÃO DE PETRÓLEO E GÁS NATURAL", "07": "EXTRAÇÃO DE MINERAIS METÁLICOS", "08": "EXTRAÇÃO DE MINERAIS NÃO-METÁLICOS", "09": "ATIVIDADES DE APOIO À EXTRAÇÃO DE MINERAIS", "10": "FABRICAÇÃO DE PRODUTOS ALIMENTÍCIOS", "11": "FABRICAÇÃO DE BEBIDAS", "12": "FABRICAÇÃO DE PRODUTOS DO FUMO", "13": "FABRICAÇÃO DE PRODUTOS TÊXTEIS", "14": "CONFECÇÃO DE ARTIGOS DO VESTUÁRIO E ACESSÓRIOS", "15": "PREPARAÇÃO DE COUROS E FABRICAÇÃO DE ARTEFATOS DE COURO, ARTIGOS PARA VIAGEM E CALÇADOS", "16": "FABRICAÇÃO DE PRODUTOS DE MADEIRA", "17": "FABRICAÇÃO DE CELULOSE, PAPEL E PRODUTOS DE PAPEL", "18": "IMPRESSÃO E REPRODUÇÃO DE GRAVAÇÕES", "19": "FABRICAÇÃO DE COQUE, DE PRODUTOS DERIVADOS DO PETRÓLEO E DE BIOCOMBUSTÍVEIS", "20": "FABRICAÇÃO DE PRODUTOS QUÍMICOS", "21": "FABRICAÇÃO DE PRODUTOS FARMOQUÍMICOS E FARMACÊUTICOS", "22": "FABRICAÇÃO DE PRODUTOS DE MATERIAL PLÁSTICO E DE BORRACHA", "23": "FABRICAÇÃO DE PRODUTOS DE MINERAIS NÃO-METÁLICOS", "24": "METALURGIA", "25": "FABRICAÇÃO DE PRODUTOS DE METAL, EXCETO MÁQUINAS E EQUIPAMENTOS", "26": "FABRICAÇÃO DE EQUIPAMENTOS DE INFORMÁTICA, PRODUTOS ELETRÔNICOS E ÓPTICOS", "27": "FABRICAÇÃO DE MÁQUINAS, APARELHOS E MATERIAIS ELÉTRICOS", "28": "FABRICAÇÃO DE MÁQUINAS E EQUIPAMENTOS, EXCETO MÁQUINAS E EQUIPAMENTOS", "29": "FABRICAÇÃO DE VEÍCULOS AUTOMOTORES, REBOQUES E SEMIRREBOQUES", "30": "FABRICAÇÃO DE OUTROS EQUIPAMENTOS DE TRANSPORTE, EXCETO VEÍCULOS AUTOMOTORES", "31": "FABRICAÇÃO DE MÓVEIS", "32": "FABRICAÇÃO DE PRODUTOS DIVERSOS", "33": "MANUTENÇÃO, REPARAÇÃO E INSTALAÇÃO DE MÁQUINAS E EQUIPAMENTOS", "35": "ELETRICIDADE, GÁS E OUTRAS UTILIDADES", "36": "CAPTAÇÃO, TRATAMENTO E DISTRIBUIÇÃO DE ÁGUA", "37": "ESGOTO E ATIVIDADES RELACIONADAS", "38": "COLETA, TRATAMENTO E DISPOSIÇÃO DE RESÍDUOS; RECUPERAÇÃO DE MATERIAIS", "39": "DESCONTAMINAÇÃO E OUTROS SERVIÇOS DE GESTÃO DE RESÍDUOS", "41": "CONSTRUÇÃO DE EDIFÍCIOS", "42": "OBRAS DE INFRAESTRUTURA", "43": "SERVIÇOS ESPECIALIZADOS PARA CONSTRUÇÃO", "45": "COMÉRCIO E REPARAÇÃO DE VEÍCULOS AUTOMOTORES E MOTOCICLETAS", "46": "COMÉRCIO POR ATACADO, EXCETO VEÍCULOS AUTOMOTORES E MOTOCICLETAS", "47": "COMÉRCIO VAREJISTA", "49": "TRANSPORTE TERRESTRE", "50": "TRANSPORTE AQUAVIÁRIO", "51": "TRANSPORTE AÉREO", "52": "ARMAZENAGEM E ATIVIDADES AUXILIARES DOS TRANSPORTES", "53": "CORREIO E OUTRAS ATIVIDADES DE ENTREGA", "55": "ALOJAMENTO", "56": "ALIMENTAÇÃO", "58": "EDIÇÃO E EDIÇÃO INTEGRADA À IMPRESSÃO", "59": "ATIVIDADES CINEMATOGRÁFICAS, PRODUÇÃO DE VÍDEOS E DE PROGRAMAS DE TELEVISÃO; GRAVAÇÃO DE SOM E EDIÇÃO DE MÚSICA", "60": "ATIVIDADES DE RÁDIO E DE TELEVISÃO", "61": "TELECOMUNICAÇÕES", "62": "ATIVIDADES DOS SERVIÇOS DE TECNOLOGIA DA INFORMAÇÃO", "63": "ATIVIDADES DE PRESTAÇÃO DE SERVIÇOS DE INFORMAÇÃO", "64": "ATIVIDADES DE SERVIÇOS FINANCEIROS", "65": "SEGUROS, RESSEGUROS, PREVIDÊNCIA COMPLEMENTAR E PLANOS DE SAÚDE", "66": "ATIVIDADES AUXILIARES DOS SERVIÇOS FINANCEIROS, SEGUROS, PREVIDÊNCIA COMPLEMENTAR E PLANOS DE SAÚDE", "68": "ATIVIDADES IMOBILIÁRIAS", "69": "ATIVIDADES JURÍDICAS, DE CONTABILIDADE E DE AUDITORIA", "70": "ATIVIDADES DE SEDES DE EMPRESAS E DE CONSULTORIA EM GESTÃO EMPRESARIAL", "71": "SERVIÇOS DE ARQUITETURA E ENGENHARIA; TESTES E ANÁLISES TÉCNICAS", "72": "PESQUISA E DESENVOLVIMENTO CIENTÍFICO", "73": "PUBLICIDADE E PESQUISA DE MERCADO", "74": "OUTRAS ATIVIDADES PROFISSIONAIS, CIENTÍFICAS E TÉCNICAS", "75": "ATIVIDADES VETERINÁRIAS", "77": "ALUGUÉIS NÃO-IMOBILIÁRIOS E GESTÃO DE ATIVOS INTANGÍVEIS NÃO-FINANCEIROS", "78": "SELEÇÃO, AGENCIAMENTO E LOCAÇÃO DE MÃO-DE-OBRA", "79": "AGÊNCIAS DE VIAGENS, OPERADORES TURÍSTICOS E SERVIÇOS DE RESERVAS", "80": "ATIVIDADES DE VIGILÂNCIA, SEGURANÇA E INVESTIGAÇÃO", "81": "SERVIÇOS PARA EDIFÍCIOS E ATIVIDADES PAISAGÍSTICAS", "82": "SERVIÇOS DE ESCRITÓRIO, APOIO ADMINISTRATIVO E OUTROS SERVIÇOS PRESTADOS PRINCIPALMENTE ÀS EMPRESAS", "84": "ADMINISTRAÇÃO PÚBLICA, DEFESA E SEGURIDADE SOCIAL", "85": "EDUCAÇÃO", "86": "ATIVIDADES DE ATENÇÃO À SAÚDE HUMANA", "87": "ATIVIDADES DE ATENÇÃO À SAÚDE HUMANA INTEGRADAS COM ASSISTÊNCIA SOCIAL, PRESTADAS EM RESIDÊNCIAS COLETIVAS E PARTICULARES", "88": "SERVIÇOS DE ASSISTÊNCIA SOCIAL SEM ALOJAMENTO", "90": "ATIVIDADES ARTÍSTICAS, CRIATIVAS E DE ESPETÁCULOS", "91": "ATIVIDADES DE BIBLIOTECAS, ARQUIVOS, MUSEUS E OUTRAS ATIVIDADES CULTURAIS", "92": "ATIVIDADES DE EXPLORAÇÃO DE JOGOS DE AZAR E APOSTAS", "93": "ATIVIDADES ESPORTIVAS E DE RECREAÇÃO E LAZER", "94": "ATIVIDADES DE ORGANIZAÇÕES ASSOCIATIVAS", "95": "REPARAÇÃO E MANUTENÇÃO DE EQUIPAMENTOS DE INFORMÁTICA E COMUNICAÇÃO E DE OBJETOS PESSOAIS E DOMÉSTICOS", "96": "OUTRAS ATIVIDADES DE SERVIÇOS PESSOAIS", "97": "SERVIÇOS DOMÉSTICOS", "99": "ORGANISMOS INTERNACIONAIS E OUTRAS INSTITUIÇÕES EXTRATERRITORIAIS" };
+
+    function capitalizarTexto(texto) {
+        if (!texto) return "";
+        const excecoes = ["de", "da", "do", "das", "dos", "e", "em", "para", "com", "à", "ao", "aos"];
+        return texto.toLowerCase().split(' ').map((palavra, index) => {
+            if (index > 0 && excecoes.includes(palavra)) return palavra;
+            return palavra.charAt(0).toUpperCase() + palavra.slice(1);
+        }).join(' ');
+    }
+
+    function calcularIdade(dataAbertura) {
+        if (!dataAbertura) return 0;
+        const d = new Date(dataAbertura);
+        const hoje = new Date();
+        let anos = hoje.getFullYear() - d.getFullYear();
+        const m = hoje.getMonth() - d.getMonth();
+        if (m < 0 || (m === 0 && hoje.getDate() < d.getDate())) anos--;
+        return anos;
+    }
+
+    function getCategoriaRisco(idade) {
+        if (idade <= 2) return "NOVA";
+        if (idade <= 5) return "JOVEM";
+        if (idade <= 10) return "MATURA";
+        return "ANTIGA";
+    }
+
+    async function consultar() {
+        const input = document.getElementById("cnpjs");
+        const status = document.getElementById("status");
+        const resultado = document.getElementById("resultado");
+        
+        // REMOÇÃO DE DUPLICATAS: Usando Set para garantir CNPJs únicos antes da consulta
+        const listaBruta = input.value.split(/[\n,]/).map(c => c.replace(/\D/g, "")).filter(c => c.length === 14);
+        const lista = [...new Set(listaBruta)];
+
+        if (lista.length === 0) { alert("Insira CNPJs válidos."); return; }
+        resultado.innerHTML = "";
+        status.innerHTML = `<span class="loading">Consultando 0/${lista.length}...</span>`;
+
+        let countRJ = 0, countInativa = 0, somaIdade = 0;
+        const ufs = new Set(), muns = new Set(), clis = new Set(), stats = new Set();
+
+        for (let i = 0; i < lista.length; i++) {
+            status.innerHTML = `<span class="loading">Consultando ${i + 1}/${lista.length}...</span>`;
+            try {
+                const r = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${lista[i]}`);
+                if (!r.ok) continue;
+                const d = await r.json();
+
+                const cnaeRaw = String(d.cnae_fiscal || "").padStart(7, "0");
+                const divisao = cnaeRaw.substring(0,2);
+                const divisaoNome = capitalizarTexto(mapaDivisoes[divisao] || "Não Identificado");
+                const razaoSocial = capitalizarTexto(d.razao_social);
+                const municipio = capitalizarTexto(d.municipio);
+                const idade = calcularIdade(d.data_inicio_atividade);
+                const isMatriz = lista[i].endsWith("0001");
+                const isRJ = d.razao_social.toUpperCase().includes("JUDICIAL");
+                const isAtiva = d.descricao_situacao_cadastral === "ATIVA";
+                
+                if (isRJ) countRJ++;
+                if (!isAtiva) countInativa++;
+                somaIdade += idade;
+                ufs.add(d.uf); muns.add(municipio); clis.add(razaoSocial); stats.add(d.descricao_situacao_cadastral);
+
+                const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(d.logradouro + ', ' + d.numero + ' - ' + d.municipio + ' - ' + d.uf)}`;
+
+                const row = document.createElement("tr");
+                if (isRJ) row.classList.add("recuperacao-judicial");
+                row.setAttribute("data-idade-cat", getCategoriaRisco(idade));
+                row.setAttribute("data-tipo", isMatriz ? "MATRIZ" : "FILIAL");
+
+                row.innerHTML = `
+                    <td class="col-cnpj">${lista[i]}</td>
+                    <td class="col-cliente" title="${razaoSocial}">${razaoSocial}</td>
+                    <td class="col-status"><span class="status-badge ${isAtiva ? 'status-ativa' : 'status-alerta'}">${d.descricao_situacao_cadastral}</span></td>
+                    <td class="col-rj"><strong>${isRJ ? 'Sim' : 'Não'}</strong></td>
+                    <td class="col-tipo"><span class="badge-tipo ${isMatriz ? 'tipo-matriz' : 'tipo-filial'}">${isMatriz ? 'Matriz' : 'Filial'}</span></td>
+                    <td class="col-idade">${idade} Anos</td>
+                    <td class="col-loc"><a href="${mapsUrl}" target="_blank" class="btn-maps">📍 Mapa</a></td>
+                    <td class="col-mun">${municipio}</td>
+                    <td class="col-uf">${d.uf}</td>
+                    <td class="col-cnae">${cnaeRaw.substring(0,2)}.${cnaeRaw.substring(2,4)}-${cnaeRaw.substring(4,5)}-${cnaeRaw.substring(5,7)}</td>
+                    <td class="col-sec">${getSecaoLetra(cnaeRaw)}</td>
+                    <td class="col-div">${divisao}</td>
+                    <td class="col-desc-div">${divisaoNome}</td>
+                    <td class="col-ativ">${capitalizarTexto(d.cnae_fiscal_descricao)}</td>
+                `;
+                resultado.appendChild(row);
+            } catch (e) { console.error(e); }
+            await new Promise(res => setTimeout(res, 250));
+        }
+
+        document.getElementById("dashTotal").innerText = lista.length;
+        document.getElementById("dashRJ").innerText = countRJ;
+        document.getElementById("dashInativa").innerText = countInativa;
+        document.getElementById("dashIdade").innerText = (somaIdade / (lista.length || 1)).toFixed(1) + " Anos";
+        status.innerHTML = "Consulta finalizada!";
+        
+        popularFiltro("filtroUF", ufs); popularFiltro("filtroMunicipio", muns);
+        popularFiltro("filtroCliente", clis); popularFiltro("filtroStatus", stats);
+    }
+
+    function getSecaoLetra(cnae) {
+        const n = parseInt(cnae.substring(0, 2));
+        if (n <= 3) return 'A'; if (n <= 9) return 'B'; if (n <= 33) return 'C'; if (n <= 35) return 'D';
+        if (n <= 39) return 'E'; if (n <= 43) return 'F'; if (n <= 47) return 'G'; if (n <= 53) return 'H';
+        if (n <= 56) return 'I'; if (n <= 63) return 'J'; if (n <= 66) return 'K'; if (n === 68) return 'L';
+        if (n <= 75) return 'M'; if (n <= 82) return 'N'; if (n === 84) return 'O'; if (n === 85) return 'P';
+        if (n <= 88) return 'Q'; if (n <= 93) return 'R'; if (n <= 96) return 'S'; if (n === 97) return 'T';
+        return 'U';
+    }
+
+    function popularFiltro(id, set) {
+        const s = document.getElementById(id); s.innerHTML = "";
+        [...set].sort().forEach(v => { const o = document.createElement("option"); o.value = v; o.text = v; s.appendChild(o); });
+    }
+
+    function aplicarFiltros() {
+        const ufs = Array.from(document.getElementById("filtroUF").selectedOptions).map(o => o.value);
+        const muns = Array.from(document.getElementById("filtroMunicipio").selectedOptions).map(o => o.value);
+        const stats = Array.from(document.getElementById("filtroStatus").selectedOptions).map(o => o.value);
+        const tipos = Array.from(document.getElementById("filtroTipo").selectedOptions).map(o => o.value);
+        const idades = Array.from(document.getElementById("filtroIdade").selectedOptions).map(o => o.value);
+        const clis = Array.from(document.getElementById("filtroCliente").selectedOptions).map(o => o.value);
+
+        document.querySelectorAll("#resultado tr").forEach(tr => {
+            const t = tr.children;
+            const show = (!ufs.length || ufs.includes(t[8].innerText)) &&
+                         (!muns.length || muns.includes(t[7].innerText)) &&
+                         (!stats.length || stats.includes(t[2].innerText)) &&
+                         (!tipos.length || tipos.includes(tr.getAttribute("data-tipo"))) &&
+                         (!idades.length || idades.includes(tr.getAttribute("data-idade-cat"))) &&
+                         (!clis.length || clis.includes(t[1].innerText));
+            tr.style.display = show ? "" : "none";
+        });
+    }
+
+    function limparFiltros() {
+        ["filtroUF", "filtroMunicipio", "filtroStatus", "filtroTipo", "filtroIdade", "filtroCliente"].forEach(id => {
+            Array.from(document.getElementById(id).options).forEach(o => o.selected = false);
+        });
+        aplicarFiltros();
+    }
+
+    function exportarExcel() {
+        const wb = XLSX.utils.book_new();
+        const rows = [["CNPJ", "Razão Social", "Status", "Rec. Judicial", "Tipo", "Idade", "Município", "UF", "CNAE", "Atividade"]];
+        document.querySelectorAll("#resultado tr").forEach(tr => {
+            if (tr.style.display !== "none") {
+                const t = tr.children;
+                rows.push([t[0].innerText, t[1].innerText, t[2].innerText, t[3].innerText, t[4].innerText, t[5].innerText, t[7].innerText, t[8].innerText, t[9].innerText, t[13].innerText]);
+            }
+        });
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "Consulta");
+        XLSX.writeFile(wb, "Consulta_CNPJ_Advanced.xlsx");
+    }
+</script>
+
+</body>
+</html>
